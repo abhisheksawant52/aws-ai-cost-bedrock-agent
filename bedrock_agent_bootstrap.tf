@@ -18,27 +18,13 @@ resource "null_resource" "bedrock_agent_bootstrap" {
       FOUNDATION_MODEL="amazon.titan-text-express-v1"
       AGENT_ALIAS_NAME="prod"
 
-      echo "Looking for existing Bedrock Agent '$${AGENT_NAME}' in region $${REGION} ..."
-
-      EXISTING_AGENT_ID=$(aws bedrock-agent list-agents \
-        --region "$${REGION}" \
-        --query "agentSummaries[?agentName=='$${AGENT_NAME}'].agentId | [0]" \
-        --output text)
-
-      if [ "$${EXISTING_AGENT_ID}" != "None" ] && [ -n "$${EXISTING_AGENT_ID}" ]; then
-        echo "Found existing Agent: $${EXISTING_AGENT_ID}"
-        AGENT_ID="$${EXISTING_AGENT_ID}"
-      else
-        echo "No existing agent found. Creating new Agent..."
-
-        # Build the instruction text safely with a here-doc.
-        INSTRUCTION=$(cat << 'EOF'
+      # Build the instruction text safely with a here-doc (used for both update & create).
+      INSTRUCTION=$(cat << 'EOF'
 You are an AWS FinOps Cost Reporting Assistant.
 
 You receive JSON containing AWS month-to-date unblended cost data by service.
 
-Your task is to generate a final, ready-to-send email, not a draft.
-Never say 'Here is a draft email', 'Here is an email', or any meta-commentary.
+Your task is to generate a final, ready-to-send email. terraform 
 
 GREETING RULE
 Always use this greeting exactly:
@@ -74,6 +60,25 @@ The raw block will be appended by the Lambda function automatically.
 Your response must be the final email body only.
 EOF
 )
+
+      echo "Looking for existing Bedrock Agent '$${AGENT_NAME}' in region $${REGION} ..."
+
+      EXISTING_AGENT_ID=$(aws bedrock-agent list-agents \
+        --region "$${REGION}" \
+        --query "agentSummaries[?agentName=='$${AGENT_NAME}'].agentId | [0]" \
+        --output text)
+
+      if [ "$${EXISTING_AGENT_ID}" != "None" ] && [ -n "$${EXISTING_AGENT_ID}" ]; then
+        echo "Found existing Agent: $${EXISTING_AGENT_ID}"
+        AGENT_ID="$${EXISTING_AGENT_ID}"
+
+        echo "Updating existing agent instruction ..."
+        aws bedrock-agent update-agent \
+          --region "$${REGION}" \
+          --agent-id "$${AGENT_ID}" \
+          --instruction "$${INSTRUCTION}"
+      else
+        echo "No existing agent found. Creating new Agent..."
 
         AGENT_ID=$(aws bedrock-agent create-agent \
           --region "$${REGION}" \

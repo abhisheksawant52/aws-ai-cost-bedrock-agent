@@ -66,13 +66,8 @@ def summarize_costs_with_bedrock_agent(cost_data: dict) -> str:
     session_id = str(uuid.uuid4())
     print(f"DEBUG Bedrock session_id={session_id}")
 
-    # Tell the agent explicitly that we want HTML
-    input_text = (
-        "You will receive AWS month-to-date unblended cost data in JSON format.\n"
-        "Using your configured instructions, generate a professional HTML email body summarizing the costs.\n\n"
-        "Here is the JSON data:\n\n"
-        f"{json.dumps(cost_data, indent=2)}"
-    )
+    # IMPORTANT: send only the raw JSON as input, no extra "draft" or "HTML" instructions
+    input_text = json.dumps(cost_data)
 
     try:
         response = bedrock_agent_runtime.invoke_agent(
@@ -91,10 +86,9 @@ def summarize_costs_with_bedrock_agent(cost_data: dict) -> str:
         if chunk and "bytes" in chunk:
             completion_text.append(chunk["bytes"].decode("utf-8"))
 
-    ai_html = "".join(completion_text).strip()
-    print(f"DEBUG Bedrock HTML (first 400 chars): {ai_html[:400]}")
-    return ai_html
-
+    ai_email_text = "".join(completion_text).strip()
+    print(f"DEBUG Bedrock email body (first 400 chars): {ai_email_text[:400]}")
+    return ai_email_text
 
 def format_raw_numbers_block(cost_data: dict) -> str:
     lines = []
@@ -115,12 +109,17 @@ def format_raw_numbers_block(cost_data: dict) -> str:
     return "\n".join(lines)
 
 
-def build_html_email(ai_html_body: str, raw_block: str) -> str:
+def build_html_email(ai_email_body: str, raw_block: str) -> str:
     """
-    Wrap the agent's HTML fragment into a full HTML email with some simple styling
+    Wrap the agent's PLAIN TEXT email into a full HTML email with some simple styling
     and a 'Raw Data' section below.
     """
-    # Escape raw block for HTML <pre> (basic replace)
+
+    # Convert line breaks in the AI email to HTML <br> tags
+    ai_email_html = ai_email_body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    ai_email_html = ai_email_html.replace("\n", "<br />\n")
+
+    # Escape raw block for HTML <pre>
     raw_block_escaped = (
         raw_block.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -135,7 +134,9 @@ def build_html_email(ai_html_body: str, raw_block: str) -> str:
   </head>
   <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
     <div style="max-width: 800px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-      {ai_html_body}
+      <div style="font-size: 14px; color: #222; line-height: 1.5;">
+        {ai_email_html}
+      </div>
 
       <hr style="margin: 24px 0; border: none; border-top: 1px solid #e0e0e0;" />
 
@@ -151,7 +152,6 @@ def build_html_email(ai_html_body: str, raw_block: str) -> str:
 </html>
 """
     return html
-
 
 def send_email_via_ses_html(to_email: str, from_email: str, subject: str, html_body: str):
     print(
