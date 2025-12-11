@@ -23,7 +23,8 @@ variable "cost_email_from" {
 variable "bedrock_model_id" {
   description = "Bedrock foundation model ID for the Agent"
   type        = string
-  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
+  # Example: change to a model you already have enabled in Bedrock console
+  default     = "amazon.titan-text-express-v1"
 }
 
 variable "bedrock_agent_name" {

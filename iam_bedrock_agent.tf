@@ -31,6 +31,15 @@ resource "aws_iam_policy" "bedrock_agent_policy" {
           "logs:PutLogEvents"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "AllowInvokeModel"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = "*"
       }
     ]
   })
